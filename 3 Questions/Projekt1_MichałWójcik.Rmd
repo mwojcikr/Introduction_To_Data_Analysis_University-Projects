@@ -1,0 +1,159 @@
+---
+title: "Answering questions about citizens in 2005 using data"
+author: "Michał Wójcik"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Czy wielkość rodziny jest powiązana z wykształceniem głowy rodziny
+```{r}
+
+data <- read.csv('budzety2005.csv')
+summary(data)
+library(dplyr)
+library(ggplot2)
+
+#Selecting data on big families
+
+data_1 <- data %>%
+          filter(numpHH >= 6) %>%
+          select(hhno,reltohoh,numpHH,townsize,farmsize,buildtype,totincGUS,educ)
+
+#Selecting data on heads of big families
+
+headofbigfamily <- data_1 %>%
+                   filter(reltohoh == " head ") %>%
+                   select(hhno,numpHH,townsize,farmsize,buildtype,totincGUS,educ)
+
+#Counting percentages of head's various types of education
+
+hoh_educ <- headofbigfamily$educ
+no_hoh_educ <- table(hoh_educ)
+rev(sort(prop.table(no_hoh_educ)*100))
+
+barplot(table(hoh_educ),las = 2,cex.names = 0.6)
+
+#Counting percentages of head's town size
+hoh_townsize <- headofbigfamily$townsize
+rev(sort(prop.table(table(hoh_townsize))*100))
+
+#Counting percentages of head's build type
+hoh_buildtype <- headofbigfamily$buildtype
+rev(sort(prop.table(table(hoh_buildtype))*100))
+
+```
+
+Jak widać duże rodziny z wyższym wykształceniem założyło zaledwie 3,90% osób.
+72% dużych rodzin mieszka na wsi.
+67% dużych rodzin mieszka w wolno stojących budynkach.
+
+
+### Czy głowy rodziny mieszkające w miastach którzy na czas upadku komunizmu mieli 21 - 35 lat są bardziej zamożne niż reszta społeczeństwa?
+
+```{r}
+library(tidyverse)
+
+#Selecting people aged 21-35 in 1989 
+
+data_2_1 <- data %>% 
+          filter(reltohoh == " head ", ageofhead <=51, ageofhead >=37,
+                 townsize != "villages") %>%
+          select(wojregion,totinc_data,mainincHH,ageofhead) 
+          
+          
+          
+# 90th percentile of income of overall population irrespective of its source 
+
+quantile_90 <- quantile(data$totinc_data, probs = .9)
+
+
+# People with an income higher than 90% of society aged 21-35 in 1989
+
+data_2_1_corrected_by_inc <- data_2_1 %>%
+                           filter(totinc_data > quantile_90)
+
+# Richest 10% divided by main source of income 
+
+wynik_2_1 <- data_2_1_corrected_by_inc %>%
+                        as_tibble() %>%
+                        count(mainincHH)
+
+nrow(data_2_1_corrected_by_inc)/nrow(data_2_1)
+
+# The rest
+
+data_2_2_older <- data %>% 
+          filter(reltohoh == " head ", ageofhead>51,
+                 townsize != "villages") %>%
+          select(wojregion,totinc_data,mainincHH,ageofhead) 
+          
+data_2_2_younger <- data %>% 
+          filter(reltohoh == " head ", ageofhead <37, ageofhead >= 21,
+                 townsize != "villages") %>%
+          select(wojregion,totinc_data,mainincHH,ageofhead) 
+
+data_2_2 <- rbind(data_2_2_older,data_2_2_younger)
+
+
+#People with an income higher than 90% of society aged other (>21) than previous group
+
+data_2_2_corrected_by_inc <- data_2_2 %>%
+                           filter(totinc_data > quantile_90)
+
+#Richest 10% divided by main source of income
+wynik_2_2 <- data_2_2_corrected_by_inc %>%
+                        as_tibble() %>%
+                        count(mainincHH)
+
+# Counting both populations
+npop1 <- nrow(data_2_1)
+npop2 <- nrow(data_2_2)
+
+a1<- (wynik_2_1$n/npop1)*100
+a2<- c("disability pens.","employee, manual","employee, non-manual", "farmer","from rent of house(flat), garage","nonfarm selfempl.","retirement pens.")
+
+b1<- (wynik_2_2$n/npop2)*100
+b2<- c("disability pens.","employee, manual","employee, non-manual", "farmer","from rent of house(flat), garage","nonfarm selfempl.","other social assistance","retirement pens.")
+
+result_1 <-as.data.frame(a2)
+result_1 <- cbind(result_1,a1)
+
+result_2 <-as.data.frame(b2)
+result_2 <- cbind(result_2,b1)
+result_2 <- result_2 %>% slice(-c(7))
+
+general_results <- cbind(result_1, result_2)
+colnames(general_results) <- c("1st Group","Percentage","2nd Group","Percentage")
+
+print.data.frame(general_results)
+
+```
+
+Ludzie w wieku 21 - 35 założyli 2,5 razy więcej firm które uplasowują ich w top 10% najlepiej zarabiających głów rodzin wśród wszystkich grup wiekowych niż reszta społeczeństwa.
+
+10% najlepiej zarabiających z tej grupy stanowi 28% populacji swojej grupy wiekowej podczas gdy
+10% najlepiej zarabiających reszty stanowi 18% populacji swojej grupy wiekowej. Co krótko oznacza, że większy odsetek ludzi z interesującej nas grupy osiągnął spory sukces. 
+
+
+
+### W którym województwie płaci się największe rachunki?
+
+```{r}
+data <- read.csv('budzety2005.csv')
+data_3 <- data %>%
+          select(buildtype,wojregion,bills)
+
+result_3 <- aggregate(data_3$bills ~ data_3$buildtype + data_3$wojregion, FUN=mean)
+result_3
+top_n(result_3[3],3)
+```
+Najwieksze rachunki placi sie za inny typ domu w Lubuskim, potem inny typ w Opolskim, a 
+jako trzecie uplasowal sie typ domu blizniak w woj. Mazowieckim
+
+
+
+
+
